@@ -1,0 +1,90 @@
+<p>For this <code>synopsis.py</code> file to be runnable, you need to start a Celery worker
+using the following command: <code>celery -A worker worker -l INFO</code> (<code>-A</code> is an
+alias for <code>--app</code>, whilst <code>-l</code> is an alias for <code>--loglevel</code>).</p>
+<h1>Promises (or &quot;tasks&quot;)</h1>
+<p>A promise can be created using the <code>.task()</code> decorator, taken from a <code>Celery</code>
+object:</p>
+<div class="highlight"><pre><span></span>app = Celery(...)
+
+@app.task
+def add(x, y):
+    return x + y
+
+@app.task
+def sum_task(numbers):
+    return sum(numbers)
+
+</pre></div>
+<p>Then, you can invoke the promise directly: <code>add(2, 2) = 4</code>. This will execute
+the promise in the current thread, not using the worker. If you want to invoke
+a function using the running worker, you would write: <code>add.delay(2, 2) = &lt;AsyncResult: 449cc906-3ba8-449f-9f14-9499f3b2a3bd&gt;</code>.
+This is just a star-argument alias of another method:
+<code>add.apply_async((2, 2)) = &lt;AsyncResult: b97743ad-91bd-48ad-a941-3f5308ee7f16&gt;</code>. <code>.apply_async()</code> has way more capabilities and
+you may find it useful in some situations, so check it out just in case.</p>
+<p>As you may have noticed, <code>add.delay(2, 2)</code> returned something strange. This
+object - instance of <code>AsyncResult</code> - is used to asynchronously wait for the
+results and gather them. You can get the results by invoking <code>.get()</code> on the
+<code>AsyncResult</code>: <code>add.delay(2, 2).get() = 4</code>. You can specify a <code>timeout=</code> for
+this method if you want. The unary negation operator (<code>~</code>) is used as a
+shorthand for <code>.delay().get()</code>, what you will see further.</p>
+<h1>Signatures</h1>
+<p>Signatures are basically <code>partial</code>s (from the <code>functools</code> module) combined
+with <code>PromiseProxy</code> (from the <code>celery</code> module): <code>add.s(1, 2) = tasks.add(1, 2)</code>.</p>
+<p><code>PromiseProxy.s()</code> is just an alias for <code>PromiseProxy.signature()</code> with
+starred arguments and fewer capabilities, just like with <code>.delay()</code> and
+<code>.apply_async()</code>.</p>
+<p>Signatures can be invoked just as regular <code>@task</code>-marked functions:
+<code>add.s(1, 2).delay().get() = 3</code>. Also, here I can show you the first example
+of an unary negation used as a shorthand for <code>.delay().get()</code>:
+~add.s(1, 2) = 3. This form of writing will be used where possible from now
+on.</p>
+<p>Also, as already mentioned, they can be used like <code>partial</code>s:
+<code>add.s(1).delay(2).get() = 3</code>.
+<strong>When invoking a signature, new arguments will be prepended, not appended.</strong></p>
+<p>Signatures are of the <code>celery.canvas.Signature</code> type.</p>
+<h1>Data structures</h1>
+<p>These are more ways of processing data than data structures, actually. Each of
+them takes an <code>Iterable</code> as an argument (i.e. any object that has the
+<code>__iter__</code> method), but I use tuples here for convenience. The rules of
+signatures also apply on data structures: a simple call does not use the
+worker process and does everything locally (in the current process),
+<code>.apply_async()</code> uses the worker process, <code>~</code> can be used as a shorthand for
+<code>.delay().get()</code>, and you can use these new objects as <code>partial</code>s. Well,
+except <code>.map()</code>, <code>.starmap()</code> or <code>.chunks()</code> - they cannot be used as a
+<code>partial</code>. And also except <code>chord</code>s - they do not support local execution, and
+also you cannot use message queues as their backend.</p>
+<h2>Groups</h2>
+<p>Groups are the ordered collections of signatures:
+<code>group(add.s(1, 2), add.s(3, 4)) = group((tasks.add(1, 2), add(3, 4)))</code>.</p>
+<p>If a group is invoked, it behaves like an invocation of a list of signatures:
+<code>~group(add.s(1, 2), add.s(3, 4)) = [3, 7]</code>.</p>
+<p>They can also be used like <code>partial</code>s:
+<code>group((add.s(1), add.s(2))).delay(10).get() = [11, 12]</code>.</p>
+<h2>Chains</h2>
+<p><code>chain</code>s make it possible to invoke a promise when another returns:
+<code>~chain(add.s(1, 2) | add.s(4)) = 7</code>. They can also be written in
+this way: <code>~(add.s(1, 2) | add.s(4)) = 7</code>.
+Again, <code>partial</code>s: <code>(add.s(2) | add.s(1)).delay(3).get() = 6</code>.</p>
+<h2>Chords</h2>
+<p><code>chord</code>s are used to send the results of several promises to one promise.
+Like that: <code>chord(add.s(i, i) for i in range(10))(sum_task.s()).get()</code>.
+Sadly, I wasn't able to test this code, because the price of it is setting
+up PostgreSQL or some other database as a backend, and I don't want to spend
+my time on it now. But you can test it yourself! Just set up PostgreSQL (or
+any other database, in-memory databases will also work) as a backend for
+Celery, add braces around the expression above and re-compile the synopsis by
+running the <code>synopsis.py</code> script!</p>
+<h2>Maps</h2>
+<p><code>.map()</code> can only be used on functions that take one argument. <code>.map()</code> takes
+an iterable of arguments and returns a list of results for corresponding
+arguments. <code>.map()</code> returns an instance of the <code>celery.canvas.xmap</code> class and
+can be invoked using negation: <code>~sum_task.map([[1, 2], [3, 4]]) = [3, 7]</code> (notice
+that <code>sum_task</code> is being called now).</p>
+<h2>Starmaps</h2>
+<p>Same as <code>.map()</code>s, but can supply more than one argument:
+<code>~add.starmap([[1, 2], [3, 4]]) = [3, 7]</code>
+(notice that <code>add</code> is being called now).</p>
+<h2>Chunks</h2>
+<p><code>.chunks()</code> is like a <code>.starmap()</code>, but divided to chunks of the specified
+length: <code>~add.chunks([(1, 2), (3, 4)], 10) = [[3, 7]]</code>.</p>
+
