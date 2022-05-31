@@ -6,22 +6,23 @@ alias for `--app`, whilst `-l` is an alias for `--loglevel`).
 # Promises (or "tasks")
 A promise can be created using the `.task()` decorator, taken from a `Celery`
 object:
-```app = Celery(...)
 
-@app.task
-def add(x, y):
-    return x + y
+    app = Celery(...)
 
-@app.task
-def sum_task(numbers):
-    return sum(numbers)```
+    @app.task
+    def add(x, y):
+        return x + y
+
+    @app.task
+    def sum_task(numbers):
+        return sum(numbers)
 
 Then, you can invoke the promise directly: `add(2, 2) = 4`. This will execute
 the promise in the current thread, not using the worker. If you want to invoke
-a function using the running worker, you would write: `add.delay(2, 2) = <AsyncResult: e02f422a-f202-4237-91be-fc22423c75d9>`.
+a function using the running worker, you would write: `add.delay(2, 2) = <AsyncResult: 63c94ea1-5536-4ebf-a741-ce6a9ac2d7c3>`.
 This is just a star-argument alias of another method:
-`add.apply_async((2, 2)) = <AsyncResult: c95c42a5-9ebf-4ab8-a6ce-62c5b2f35149>`. `.apply_async()` has way more capabilities and
-you may find it useful in some situations, so check it out just in case.
+`add.apply_async((2, 2)) = <AsyncResult: 93049239-ee0d-4c7a-b9fd-898285d75a2c>`. `.apply_async()` has way more capabilities,
+and you may find it useful in some situations, so check it out just in case.
 
 As you may have noticed, `add.delay(2, 2)` returned something strange. This
 object - instance of `AsyncResult` - is used to asynchronously wait for the
@@ -41,7 +42,7 @@ starred arguments and fewer capabilities, just like with `.delay()` and
 
 Signatures can be invoked just as regular `@task`-marked functions:
 `add.s(1, 2).delay().get() = 3`. Also, here I can show you the first example
-of an unary negation used as a shorthand for `.delay().get()`:
+of a unary negation used as a shorthand for `.delay().get()`:
 ~add.s(1, 2) = 3. This form of writing will be used where possible from now
 on.
 

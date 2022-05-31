@@ -1,3 +1,4 @@
+import sys
 import webbrowser
 
 import markdown
@@ -5,7 +6,7 @@ from celery import group, chain
 
 from tasks import add, sum_task
 
-print(markdown.markdown(f"""
+SYNOPSIS = f"""
 For this `synopsis.py` file to be runnable, you need to start a Celery worker
 using the following command: `celery -A worker worker -l INFO` (`-A` is an
 alias for `--app`, whilst `-l` is an alias for `--loglevel`).
@@ -115,5 +116,12 @@ Same as `.map()`s, but can supply more than one argument:
 ## Chunks
 `.chunks()` is like a `.starmap()`, but divided to chunks of the specified
 length: `{~add.chunks([(1, 2), (3, 4)], 10) = }`.
-""".strip()), file=open("synopsis.html", "w", encoding="utf-8"))
-webbrowser.open_new("synopsis.html")
+""".strip()
+
+if sys.argv[1] == "--markdown":
+    with open("synopsis.md", "w", encoding="utf-8") as f:
+        f.write(SYNOPSIS)
+else:
+    with open("synopsis.html", "w", encoding="utf-8") as f:
+        f.write(markdown.markdown(SYNOPSIS))
+    webbrowser.open_new("synopsis.html")
